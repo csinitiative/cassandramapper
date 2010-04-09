@@ -31,6 +31,10 @@ class IdentityTest < Test::Unit::TestCase
         end
         assert_equal "#{@values[:a]}-#{@values[:b]}", @instance.key 
       end
+
+      should 'result in default of :key if left undeclared' do
+        assert_equal :key, @class.key
+      end
     end
   end
 end

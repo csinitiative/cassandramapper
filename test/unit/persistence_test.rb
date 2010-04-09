@@ -31,6 +31,11 @@ class PersistenceTest < Test::Unit::TestCase
 
         assert @instance.save
       end
+
+      should 'throw an UndefinedKey exception if key attribute is empty' do
+        @instance.a = nil
+        assert_raise(CassandraMapper::UndefinedKeyException) { @instance.save }
+      end
     end
   end
 end
