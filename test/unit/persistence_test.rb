@@ -20,7 +20,8 @@ class PersistenceTest < Test::Unit::TestCase
       end
 
       should 'pass defined attributes to thrift for a new object' do
-        @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(true)
+        # The nil result from Cassandra/Thrift is somewhat uninspiring.
+        @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(nil)
         assert @instance.save
       end
 
