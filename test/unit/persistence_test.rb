@@ -1,6 +1,25 @@
 require 'test_helper'
 
 class PersistenceTest < Test::Unit::TestCase
+  context 'CassandraMapper::Base class' do
+    setup do
+      @class = Class.new(CassandraMapper::Base)
+    end
+
+    should 'provide a column_family class setter' do
+      assert_equal nil, @class.column_family
+      assert_equal 'SomeColumnFamily', @class.column_family('SomeColumnFamily')
+      assert_equal 'SomeColumnFamily', @class.column_family
+    end
+
+    should 'provide a connection class attribute' do
+      assert_equal nil, @class.connection
+      connection = stub('connection')
+      @class.connection = connection
+      assert_equal connection, @class.connection
+    end
+  end
+
   context 'CassandraMapper::Base' do
     setup do
       @column_family = 'TestColumnFamily'

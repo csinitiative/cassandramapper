@@ -32,6 +32,19 @@ module CassandraMapper::Persistence
       raise CassandraMapper::RecordNotFoundException unless result.size == keys.size
       single ? result.first : result
     end
+
+    def connection
+      @cassandra_mapper_connection
+    end
+
+    def connection=(connection)
+      @cassandra_mapper_connection = connection
+    end
+
+    def column_family(family = nil)
+      @cassandra_mapper_column_family = family if ! family.nil?
+      @cassandra_mapper_column_family
+    end
   end
 
   def self.included(klass)
