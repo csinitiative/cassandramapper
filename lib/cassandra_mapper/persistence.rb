@@ -17,7 +17,11 @@ module CassandraMapper::Persistence
         else
           single = true if keys.length == 1
       end
-      result = connection.multi_get(column_family, keys).values.collect {|hash| new(hash)}
+      result = connection.multi_get(column_family, keys).values.collect do |hash|
+        obj = new(hash)
+        obj.new_record = false
+        obj
+      end
       raise CassandraMapper::RecordNotFoundException unless result.size == keys.size
       single ? result.first : result
     end

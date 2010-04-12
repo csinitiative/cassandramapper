@@ -17,4 +17,13 @@ module CassandraMapper::Identity
   def key
     read_attribute(self.class.key)
   end
+
+  def new_record=(flag)
+    @cassandra_mapper_new_record = (flag && true) || false
+  end
+
+  def new_record?
+    @cassandra_mapper_new_record = true unless defined? @cassandra_mapper_new_record
+    @cassandra_mapper_new_record
+  end
 end

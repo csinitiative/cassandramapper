@@ -36,5 +36,16 @@ class IdentityTest < Test::Unit::TestCase
         assert_equal :key, @class.key
       end
     end
+
+    should 'default new_record? to true' do
+      assert_equal true, @instance.new_record?
+    end
+
+    should 'allow specification of new_record flag via assignment' do
+      @instance.new_record = false
+      assert_equal false, @instance.new_record?
+      @instance.new_record = true
+      assert_equal true, @instance.new_record?
+    end
   end
 end
