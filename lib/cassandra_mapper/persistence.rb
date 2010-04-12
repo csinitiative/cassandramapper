@@ -2,7 +2,14 @@ module CassandraMapper::Persistence
   def save(with_validation = true)
     uniq_key = self.key
     raise CassandraMapper::UndefinedKeyException if uniq_key.nil?
-    connection.insert(self.class.column_family, uniq_key, to_simple(:defined => true))
+    options = {}
+    if new_record?
+      options[:defined] = true
+    else
+      return false unless changed_attributes.length > 0
+      options[:changed] = true
+    end
+    connection.insert(self.class.column_family, uniq_key, to_simple(options))
     self
   end
 

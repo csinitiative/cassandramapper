@@ -13,29 +13,55 @@ class PersistenceTest < Test::Unit::TestCase
       @class.stubs(:column_family).returns(@column_family)
     end
 
-    context 'when saving an instance' do
+    context 'when saving' do
       setup do
         @values = {:a => 'Aa', :b => 'Bb', :c => 'Cc'}
         @instance = @class.new(@values)
       end
 
-      should 'pass defined attributes to thrift for a new object' do
-        # The nil result from Cassandra/Thrift is somewhat uninspiring.
-        @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(nil)
-        assert @instance.save
+      context 'a new instance' do
+        setup do
+          @instance.stubs(:new_record?).returns(true)
+        end
+
+        should 'pass defined attributes to thrift' do
+          # The nil result from Cassandra/Thrift is somewhat uninspiring.
+          @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(nil)
+          assert @instance.save
+        end
+
+        should 'not pass undefined attributes to thrift' do
+          @values.delete :b
+          @instance.b = nil
+          @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(nil)
+
+          assert @instance.save
+        end
+
+        should 'throw an UndefinedKey exception if key attribute is empty' do
+          @instance.a = nil
+          assert_raise(CassandraMapper::UndefinedKeyException) { @instance.save }
+        end
       end
 
-      should 'not pass undefined attributes to thrift for a new object' do
-        @values.delete :b
-        @instance.b = nil
-        @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(true)
+      context 'an existing record instance' do
+        setup do
+          @instance.stubs(:new_record?).returns(false)
+        end
 
-        assert @instance.save
-      end
+        should 'be a no-op if no attributes were changed' do
+          @class.connection.expects(:insert).never
+          assert_equal false, @instance.save
+        end
 
-      should 'throw an UndefinedKey exception if key attribute is empty' do
-        @instance.a = nil
-        assert_raise(CassandraMapper::UndefinedKeyException) { @instance.save }
+        should 'pass only the key/values for attributes that changed to thrift' do
+          key = @values[:a]
+          @instance.b = 'B foo'
+          @instance.c = 'C foo'
+          expected = {:b => @instance.b, :c => @instance.c}
+          @class.connection.expects(:insert).with(@column_family, key, expected).returns(nil)
+          assert_equal @instance, @instance.save
+        end
       end
     end
 
