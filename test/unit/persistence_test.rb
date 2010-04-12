@@ -34,7 +34,7 @@ class PersistenceTest < Test::Unit::TestCase
 
     context 'when saving' do
       setup do
-        @values = {:a => 'Aa', :b => 'Bb', :c => 'Cc'}
+        @values = {'a' => 'Aa', 'b' => 'Bb', 'c' => 'Cc'}
         @instance = @class.new(@values)
       end
 
@@ -45,14 +45,14 @@ class PersistenceTest < Test::Unit::TestCase
 
         should 'pass defined attributes to thrift' do
           # The nil result from Cassandra/Thrift is somewhat uninspiring.
-          @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(nil)
+          @class.connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
           assert @instance.save
         end
 
         should 'not pass undefined attributes to thrift' do
-          @values.delete :b
+          @values.delete 'b'
           @instance.b = nil
-          @class.connection.expects(:insert).with(@column_family, @values[:a], @values).returns(nil)
+          @class.connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
 
           assert @instance.save
         end
@@ -74,10 +74,10 @@ class PersistenceTest < Test::Unit::TestCase
         end
 
         should 'pass only the key/values for attributes that changed to thrift' do
-          key = @values[:a]
+          key = @values['a']
           @instance.b = 'B foo'
           @instance.c = 'C foo'
-          expected = {:b => @instance.b, :c => @instance.c}
+          expected = {'b' => @instance.b, 'c' => @instance.c}
           @class.connection.expects(:insert).with(@column_family, key, expected).returns(nil)
           assert_equal @instance, @instance.save
         end
@@ -88,7 +88,7 @@ class PersistenceTest < Test::Unit::TestCase
       setup do
         @instances = [:A, :B, :C].inject({}) do |hash, name|
           val = name.to_s
-          hash[name.to_s] = @class.new(:a => val, :b => 'b' + val, :c => 'c' + val)
+          hash[name.to_s] = @class.new('a' => val, 'b' => 'b' + val, 'c' => 'c' + val)
           hash
         end
       end

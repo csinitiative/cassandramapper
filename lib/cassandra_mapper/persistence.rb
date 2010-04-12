@@ -2,7 +2,7 @@ module CassandraMapper::Persistence
   def save(with_validation = true)
     uniq_key = self.key
     raise CassandraMapper::UndefinedKeyException if uniq_key.nil?
-    options = {}
+    options = {:string_keys => true}
     if new_record?
       options[:defined] = true
     else
