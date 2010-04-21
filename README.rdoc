@@ -1,0 +1,98 @@
+= CassandraMapper: Easily build classes for working with Cassandra
+
++CassandraMapper+ uses the features and semantics of +SimpleMapper+ to make
+working with your Cassandra schema productive and expressive.
+
+Build your Cassandra-fronting model classes with +CassandraMapper+, using the
+same straightforward semantics of +SimpleMapper+.  +CassandraMapper+ adds in
+basic connection management (very basic, and easily customized) and persistence
+logic for inserting/updating via the Thrift client.
+
+    class Animal < CassandraMapper::Base
+      # specify the name of the column family fronted by this class
+      column_family 'Animals'
+      
+      # indicate which attribute should serve as the key for identification
+      key :species
+      
+      # specify the attributes you expect ala SimpleMapper
+      maps :species, :type => :string
+      maps :name,    :type => :string
+      
+      # define a custom type to define the domain of a given attribute
+      module DietaryPreference
+        DIETS = [:herbivore, :carnivore, :omnivore].inject({}) {|h, v| h[v] = v.to_s; h}
+        # encode should convert a "native" value (as you would work with it in Ruby)
+        # to the Cassandra storage format at it should be passed to Thrift.
+        def self.encode(value)
+          raise Exception unless value = DIETS[value]
+          value
+        end
+        # decode should convert a Cassandra/Thrift value to a "native" value (the inverse
+        # of encode)
+        def self.decode(value)
+          raise Exception unless DIETS.has_key?( key = value.to_sym )
+          key
+        end
+        # let's default to herbivore, for a kinder, gentler world
+        def self.default
+          :herbivore
+        end
+      end
+      
+      # Anything that has decode/encode/default can serve as a type,
+      # without being registered with the general symbol-lookup
+      # type registry.
+      # The :from_type default will mean the default value for this
+      # attribute (when it is left undefined) will come from the type.
+      maps :diet, :type => DietaryPreference, :default => :from_type     
+    end
+
+With a class defined, you can work with these objects as you would intuitively
+expect (though you'll need to see connection management topics to get this to work).
+
+    # now let's create some animals, in order of ascending stupidity
+    deer = Animal.new(:species => 'odocoileus virginianus',
+                      :name    => 'White-tailed Deer)
+    deer.save
+    gull = Animal.new(:species => 'larus occidentalis',
+                      :name    => 'Seagull',
+                      :diet    => :carnivore)
+    gull.save
+    human = Animal.new(:species => 'homo sapiens',
+                       :name    => 'Human',
+                       :diet    => :omnivore)
+    human.save
+    # and let's fetch 'em back.  Note that we didn't need to specify the :diet for the deer.
+    # This should return [:herbivore, :omnivore, :carnivore], though not necessarily in that order
+    Animal.find([human, deer, gull].collect {|animal| animal.species}).collect {|a| a.diet}
+
+= Connection Management
+
+As stated above, connection management is quite simple. Bare bones, in fact.
+
+At present, +CassandraMapper+ expects you to manage your connections to +Cassandra+
+yourself.  There are a variety of reasons for this.  The most important one is
+that the lack of transactional isolation, or even "session" isolation, and the
+whole eventually-consistent paradigm, effectively deprecate the idea of having all
+steps in a business transaction take place on the same connection.  If you're using
+Cassandra, chances are you're interested in serious scaling of writes or reads or
+both.  This is best achieved by managing connections yourself in a way that maximizes
+scalability/throughput for your use case.
+
+It is likely that connection management will be introduced in more sophisticated form
+in the reasonably near future, but that's not the most pressing priority.  So, for
+the time being, connections are at the class level (like in +ActiveRecord+) and need
+to be explicitly assigned.
+
+Thus, for the +Animal+ set/get examples above to truly work, you would need to
+get an instance of the +Cassandra+ thrift client (+Cassandra.new(...)+), and
+you would need to assign it to the +Animal+ class.
+
+    # load up the Cassandra client
+    require 'cassandra'
+    # get a connection and assign it to the class.
+    Animal.connection = Cassandra.new('YourKeyspace', '127.0.0.1:9160')
+
+A near-term improvement will allow per-object specification of the connection,
+for more flexible management.
