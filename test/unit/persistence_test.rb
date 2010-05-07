@@ -32,10 +32,28 @@ class PersistenceTest < Test::Unit::TestCase
       @class.stubs(:column_family).returns(@column_family)
     end
 
+    context 'connection' do
+      setup do
+        @instance = @class.new
+      end
+
+      should 'use class connection at instance level by default' do
+        assert_equal @connection, @instance.connection
+      end
+
+      should 'use instance connection if set' do
+        instance_connection = stub('instance_cassandra_client')
+        @instance.connection = instance_connection
+        assert_equal instance_connection, @instance.connection
+      end
+    end
+
     context 'when saving' do
       setup do
         @values = {'a' => 'Aa', 'b' => 'Bb', 'c' => 'Cc'}
         @instance = @class.new(@values)
+        @instance_connection = stub('instance_cassandra_client')
+        @instance.stubs(:connection).returns(@instance_connection)
       end
 
       context 'a new instance' do
@@ -45,14 +63,14 @@ class PersistenceTest < Test::Unit::TestCase
 
         should 'pass defined attributes to thrift' do
           # The nil result from Cassandra/Thrift is somewhat uninspiring.
-          @class.connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
+          @instance_connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
           assert @instance.save
         end
 
         should 'not pass undefined attributes to thrift' do
           @values.delete 'b'
           @instance.b = nil
-          @class.connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
+          @instance_connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
 
           assert @instance.save
         end
@@ -69,7 +87,7 @@ class PersistenceTest < Test::Unit::TestCase
         end
 
         should 'be a no-op if no attributes were changed' do
-          @class.connection.expects(:insert).never
+          @instance_connection.expects(:insert).never
           assert_equal false, @instance.save
         end
 
@@ -78,7 +96,7 @@ class PersistenceTest < Test::Unit::TestCase
           @instance.b = 'B foo'
           @instance.c = 'C foo'
           expected = {'b' => @instance.b, 'c' => @instance.c}
-          @class.connection.expects(:insert).with(@column_family, key, expected).returns(nil)
+          @instance_connection.expects(:insert).with(@column_family, key, expected).returns(nil)
           assert_equal @instance, @instance.save
         end
       end
