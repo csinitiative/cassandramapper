@@ -56,48 +56,242 @@ class PersistenceTest < Test::Unit::TestCase
         @instance.stubs(:connection).returns(@instance_connection)
       end
 
-      context 'a new instance' do
-        setup do
-          @instance.stubs(:new_record?).returns(true)
+      context 'to cassandra' do
+        context 'a new instance' do
+          setup do
+            @instance.stubs(:new_record?).returns(true)
+          end
+
+          should 'pass defined attributes to thrift' do
+            # The nil result from Cassandra/Thrift is somewhat uninspiring.
+            @instance_connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
+            assert @instance.save
+          end
+
+          should 'not pass undefined attributes to thrift' do
+            @values.delete 'b'
+            @instance.b = nil
+            @instance_connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
+
+            assert @instance.save
+          end
+
+          should 'throw an UndefinedKey exception if key attribute is empty' do
+            @instance.a = nil
+            assert_raise(CassandraMapper::UndefinedKeyException) { @instance.save }
+          end
         end
 
-        should 'pass defined attributes to thrift' do
-          # The nil result from Cassandra/Thrift is somewhat uninspiring.
-          @instance_connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
-          assert @instance.save
-        end
+        context 'an existing record instance' do
+          setup do
+            @instance.stubs(:new_record?).returns(false)
+          end
 
-        should 'not pass undefined attributes to thrift' do
-          @values.delete 'b'
-          @instance.b = nil
-          @instance_connection.expects(:insert).with(@column_family, @values['a'], @values).returns(nil)
+          should 'be a no-op if no attributes were changed' do
+            @instance_connection.expects(:insert).never
+            assert_equal false, @instance.save
+          end
 
-          assert @instance.save
-        end
-
-        should 'throw an UndefinedKey exception if key attribute is empty' do
-          @instance.a = nil
-          assert_raise(CassandraMapper::UndefinedKeyException) { @instance.save }
+          should 'pass only the key/values for attributes that changed to thrift' do
+            key = @values['a']
+            @instance.b = 'B foo'
+            @instance.c = 'C foo'
+            expected = {'b' => @instance.b, 'c' => @instance.c}
+            @instance_connection.expects(:insert).with(@column_family, key, expected).returns(nil)
+            assert_equal @instance, @instance.save
+          end
         end
       end
-
-      context 'an existing record instance' do
+      context 'to a mutation' do
         setup do
-          @instance.stubs(:new_record?).returns(false)
+          @column_family = :ColumnFamily
+          @class.stubs(:column_family).returns(@column_family)
+          @supercolumn_family = :SuperColumnFamily
+          @supercolumn_class = Class.new(CassandraMapper::Base) do
+            [:a, :b, :c].each do |supercol|
+              maps supercol do
+                [:x, :y, :z].each do |col|
+                  maps col
+                end
+              end
+            end
+            def key; a ? a.x : nil; end
+          end
+          @supercolumn_class.stubs(:column_family).returns(@supercolumn_family)
+          @supercolumn_instance = @supercolumn_class.new(:a => {}, :b => {}, :c => {})
+          @supercolumn_instance.stubs(:connection).returns(@instance_connection)
+          @timestamp = Time.stamp
+          Time.stubs(:stamp).returns(@timestamp)
         end
 
-        should 'be a no-op if no attributes were changed' do
-          @instance_connection.expects(:insert).never
-          assert_equal false, @instance.save
+        should 'throw an UndefinedKeyException if key is undefined' do
+          @instance.stubs(:key).returns(nil)
+          assert_raise(CassandraMapper::UndefinedKeyException) { @instance.to_mutation }
         end
 
-        should 'pass only the key/values for attributes that changed to thrift' do
-          key = @values['a']
-          @instance.b = 'B foo'
-          @instance.c = 'C foo'
-          expected = {'b' => @instance.b, 'c' => @instance.c}
-          @instance_connection.expects(:insert).with(@column_family, key, expected).returns(nil)
-          assert_equal @instance, @instance.save
+        context 'a new instance' do
+          setup do
+            @instance.stubs(:new_record?).returns(true)
+            @supercolumn_instance.stubs(:new_record?).returns(true)
+          end
+
+          should 'only provide mutations for defined simple columns' do
+            @instance.c = nil
+            result = @instance.to_mutation
+            mutations = result[@values['a']][@column_family.to_s]
+            mutations.sort! do |a, b|
+              a.column_or_supercolumn.column.name <=> b.column_or_supercolumn.column.name
+            end
+            assert_equal(
+              {
+                @values['a'] => {
+                  @column_family.to_s => ['a', 'b'].collect {|attrib|
+                    CassandraThrift::Mutation.new(
+                      :column_or_supercolumn => CassandraThrift::ColumnOrSuperColumn.new(
+                        :column => CassandraThrift::Column.new(
+                          :name      => attrib,
+                          :value     => @values[attrib],
+                          :timestamp => @timestamp
+                        )
+                      )
+                    )
+                  }
+                }
+              },
+              result
+            )
+          end
+
+          should 'only provide mutations for defined super/sub columns' do
+            @supercolumn_instance.a.x = 'a-x'
+            @supercolumn_instance.a.y = 'a-y'
+            @supercolumn_instance.b.z = 'b-z'
+            result = @supercolumn_instance.to_mutation
+            mutations = result['a-x'][@supercolumn_family.to_s]
+            mutations.sort! do |a, b|
+              a.column_or_supercolumn.super_column.name <=> b.column_or_supercolumn.super_column.name
+            end
+            mutations.each do |mutation|
+              mutation.column_or_supercolumn.super_column.columns.sort! do |a, b|
+                a.name <=> b.name
+              end
+            end
+            assert_equal(
+              {
+                'a-x' => {@supercolumn_family.to_s => [[:a, :x, :y], [:b, :z]].collect { |args|
+                  supercol = args.shift.to_s
+                  CassandraThrift::Mutation.new(
+                    :column_or_supercolumn => CassandraThrift::ColumnOrSuperColumn.new(
+                      :super_column => CassandraThrift::SuperColumn.new(
+                        :name       => supercol,
+                        :columns    => args.collect {|col|
+                          CassandraThrift::Column.new(
+                            :timestamp => @timestamp,
+                            :name      => col.to_s,
+                            :value     => supercol + '-' + col.to_s
+                          )
+                        }
+                      )
+                    )
+                  )
+                }
+              }},
+              result
+            )
+          end
+        end
+
+        context 'an existing record instance' do
+          setup do
+            @instance.stubs(:new_record?).returns(false)
+            @supercolumn_instance = @supercolumn_class.new(
+              @supercolumn_values = {
+                'a' => {'x' => 'a-x', 'y' => 'a-y', 'z' => 'a-z'},
+                'b' => {'x' => 'b-x', 'y' => 'b-y', 'z' => 'b-z'},
+                'c' => {'x' => 'c-x', 'y' => 'c-y', 'z' => 'c-z'}
+              }
+            )
+            @supercolumn_instance.stubs(:new_record?).returns(false)
+          end
+
+          should 'only output mutations for attributes that changed' do
+            @instance.b = 'foo'
+            assert_equal(
+              {
+                @values['a'] => {
+                  @column_family.to_s => [
+                    CassandraThrift::Mutation.new(
+                      :column_or_supercolumn => CassandraThrift::ColumnOrSuperColumn.new(
+                        :column => CassandraThrift::Column.new(
+                          :name      => 'b',
+                          :value     => 'foo',
+                          :timestamp => @timestamp
+                        )
+                      )
+                    )
+                  ]
+                }
+              },
+              @instance.to_mutation
+            )
+          end
+
+          should 'output deletions for attributes that were set to nil' do
+            @instance.b = nil
+            @instance.c = nil
+            result = @instance.to_mutation
+            result[@values['a']][@column_family.to_s].first.deletion.predicate.column_names.sort!
+            assert_equal(
+              {
+                @values['a'] => {
+                  @column_family.to_s => [
+                    CassandraThrift::Mutation.new(
+                      :deletion => CassandraThrift::Deletion.new(
+                        :super_column => nil,
+                        :timestamp    => @timestamp,
+                        :predicate    => CassandraThrift::SlicePredicate.new(
+                          :column_names => ['b', 'c']
+                        )
+                      )
+                    )
+                  ]
+                }
+              },
+              result
+            )
+          end
+
+# to-do: simplemapper doesn't have change tracking quite dialed in for nested
+# structures just yet.
+#          should 'only provide mutations for supercolumn/subcol attributes that changed' do
+#            @supercolumn_instance.b.y = 'foo'
+#            assert_equal(
+#              {
+#                @supercolumn_values['a']['x'] => {
+#                  @supercolumn_family.to_s => [
+#                    CassandraThrift::Mutation.new(
+#                      :column_or_supercolumn => CassandraThrift::ColumnOrSuperColumn.new(
+#                        :super_column => CassandraThrift::SuperColumn.new(
+#                          :name    => 'b',
+#                          :columns => [
+#                            CassandraThrift::Column.new(
+#                              :name      => 'x',
+#                              :value     => 'foo',
+#                              :timestamp => @timestamp
+#                            )
+#                          ]
+#                        )
+#                      )
+#                    )
+#                  ]
+#                }
+#              },
+#              @supercolumn_instance.to_mutation
+#            )
+#          end
+#
+#          should 'provide deletions for supercolumn/column attributes that were set to nil' do
+#          end
         end
       end
     end
