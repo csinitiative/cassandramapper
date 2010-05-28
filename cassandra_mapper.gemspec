@@ -16,6 +16,7 @@ Gem::Specification.new do |s|
   s.add_dependency('mocha')
   s.add_dependency('cassandra')
   s.add_dependency('simple_mapper')
+  s.add_dependency('activemodel')
 
   s.files        = FileList['*.rb', '*.rdoc', 'lib/**/*', 'test/**/*'].to_a
   s.require_path = 'lib'

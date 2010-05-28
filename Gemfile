@@ -13,3 +13,5 @@ gem "cassandra"
 git "git@github.com:csinitiative/simplemapper.git"
 gem "simple_mapper"
 
+# Callbacks, observers, etc.
+gem "activemodel"

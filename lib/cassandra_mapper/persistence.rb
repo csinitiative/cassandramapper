@@ -1,26 +1,54 @@
+require 'active_model'
 module CassandraMapper::Persistence
   def _determine_transform_options
     options = {:string_keys => true}
+    is_update = false
     if new_record?
       options[:defined] = true
     else
       return false unless changed_attributes.length > 0
       options[:changed] = true
+      is_update = true
     end
-    options
+    [options, is_update]
   end
 
   def save(with_validation = true)
-    uniq_key = _check_key
-    return false unless options = _determine_transform_options
+    _run_save_callbacks do
+      uniq_key = _check_key
+      options, is_update = _determine_transform_options
+      return false unless options
+      if is_update
+        update(uniq_key, options)
+      else
+        create(uniq_key, options)
+      end
+    end
+  end
+
+  def create(uniq_key, options)
+    _run_create_callbacks do
+      write!(uniq_key, options)
+      self
+    end
+  end
+
+  def update(uniq_key, options)
+    _run_update_callbacks do
+      write!(uniq_key, options)
+      self
+    end
+  end
+
+  def write!(uniq_key, options)
     connection.insert(self.class.column_family, uniq_key, to_simple(options))
-    self
   end
 
   def to_mutation(with_validation = true, options = {})
     uniq_key = _check_key.to_s
     timestamp = options.delete(:timestamp) || Time.stamp
-    return false unless general_opts = _determine_transform_options
+    general_opts, is_update = _determine_transform_options
+    return false unless general_opts
     options.merge!(general_opts)
     {
       uniq_key => {
@@ -92,6 +120,13 @@ module CassandraMapper::Persistence
     def column_family(family = nil)
       @cassandra_mapper_column_family = family if ! family.nil?
       @cassandra_mapper_column_family
+    end
+
+    def self.extended(klass)
+      klass.module_eval do
+        extend ActiveModel::Callbacks
+        define_model_callbacks :save, :create, :update
+      end
     end
 
     def to_mutation(simple_structure, timestamp)

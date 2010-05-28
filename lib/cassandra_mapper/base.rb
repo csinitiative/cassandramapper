@@ -1,5 +1,4 @@
 require 'simple_mapper'
-
 class CassandraMapper::Base
   include SimpleMapper::Attributes
 
