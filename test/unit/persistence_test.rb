@@ -344,13 +344,24 @@ class PersistenceTest < Test::Unit::TestCase
         assert_equal(keys.collect {|x| false}, @class.find(keys).collect {|y| y.new_record?})
       end
 
-      should 'throw a RecordNotFound exception if a key cannot be found' do
-        source_keys = @instances.keys
-        keys = source_keys.clone
-        keys.pop
-        client_result = @instances.values_at(*keys).inject({}) {|h, i| h[i.key] = i.to_simple; h}
-        @connection.expects(:multi_get).with(@column_family, source_keys).returns(client_result)
-        assert_raises(CassandraMapper::RecordNotFoundException) { @class.find(source_keys) }
+      context 'with keys that cannot be found' do
+        setup do
+          @source_keys = @instances.keys
+          @keys = @source_keys.clone
+          @keys.pop
+          @client_result = @instances.values_at(*@keys).inject({}) {|h, i| h[i.key] = i.to_simple; h}
+          @connection.expects(:multi_get).with(@column_family, @source_keys).returns(@client_result)
+        end
+
+        should 'throw a RecordNotFound exception' do
+          assert_raises(CassandraMapper::RecordNotFoundException) { @class.find(@source_keys) }
+        end
+
+        should 'return subset of objects found if :allow_missing option is true' do
+          result = (@class.find(@source_keys, :allow_missing => true) || []).sort_by {|x| x.key}.collect {|o| o.to_simple}
+          assert_equal @instances.values_at(*@keys).collect {|y| y.to_simple},
+                       result
+        end
       end
 
       should 'throw an InvalidArgument exception if the key list is empty' do

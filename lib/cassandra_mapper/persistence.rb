@@ -36,22 +36,43 @@ module CassandraMapper::Persistence
   end
 
   module ClassMethods
-    def find(*keys)
+    # Given a single key or list of keys, returns all mapped objects found
+    # for thoese keys.
+    #
+    # If the row for a specified key is missing, a CassndraMapper::RecordNotFoundException
+    # exception is raised.  This can be overridden by specifying the +:allow_missing+
+    # option (:allow_missing => true)
+    #
+    # Keys and options may be specified in a variety of ways:
+    # * Flat list
+    #     SomeClass.find(key1, key2, key3, options)
+    # * Separate lists
+    #     SomeClass.find([key1, key2, key3], options)
+    #
+    # And of course, _options_ can always be left out.
+    def find(*args)
       single = false
-      case keys.first
+      case args.first
         when Array
-          keys = keys.first
+          keys = args.first
         when nil
           raise CassandraMapper::InvalidArgumentException
         else
+          keys = args
           single = true if keys.length == 1
+      end
+      case args.last
+        when Hash
+          options = args.pop
+        else
+          options = {}
       end
       result = connection.multi_get(column_family, keys).values.collect do |hash|
         obj = new(hash)
         obj.new_record = false
         obj
       end
-      raise CassandraMapper::RecordNotFoundException unless result.size == keys.size
+      raise CassandraMapper::RecordNotFoundException unless result.size == keys.size or options[:allow_missing]
       single ? result.first : result
     end
 
