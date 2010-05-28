@@ -26,6 +26,12 @@ module CassandraMapper::Persistence
     end
   end
 
+  def loaded!
+    self.new_record = false
+    _run_load_callbacks
+    self
+  end
+
   def create(uniq_key, options)
     _run_create_callbacks do
       write!(uniq_key, options)
@@ -100,8 +106,8 @@ module CassandraMapper::Persistence
         if not hash.empty?
           obj = new(hash)
           obj.new_record = false
-          obj
           arr << obj
+          obj.loaded!
         end
         arr
       end
@@ -126,6 +132,7 @@ module CassandraMapper::Persistence
       klass.module_eval do
         extend ActiveModel::Callbacks
         define_model_callbacks :save, :create, :update
+        define_model_callbacks :load, :only => :after
       end
     end
 

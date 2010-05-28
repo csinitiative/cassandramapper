@@ -49,5 +49,27 @@ class CallbacksTest < Test::Unit::TestCase
         @instance.save
       end
     end
+
+    context 'after being retrieved via :find' do
+      setup do
+        @key = 'some_key'
+        @class.maps :some_attr
+        @source_values = {'some_attr' => 'some_value'}
+        @connection = stub('connection', :multi_get => {@key => @source_values})
+        @class.stubs(:connection).returns(@connection)
+        @class.module_eval do
+          after_load :do_after_load
+
+          def do_after_load
+            self.class.after_load_invoked('some_attr' => some_attr)
+          end
+        end
+      end
+
+      should 'invoke the after_load callback' do
+        @class.expects(:after_load_invoked).with(@source_values)
+        @class.find(@key)
+      end
+    end
   end
 end
