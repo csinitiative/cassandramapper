@@ -67,10 +67,15 @@ module CassandraMapper::Persistence
         else
           options = {}
       end
-      result = connection.multi_get(column_family, keys).values.collect do |hash|
-        obj = new(hash)
-        obj.new_record = false
-        obj
+      
+      result = connection.multi_get(column_family, keys).values.inject([]) do |arr, hash|
+        if not hash.empty?
+          obj = new(hash)
+          obj.new_record = false
+          obj
+          arr << obj
+        end
+        arr
       end
       raise CassandraMapper::RecordNotFoundException unless result.size == keys.size or options[:allow_missing]
       single ? result.first : result
