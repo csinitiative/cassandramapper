@@ -10,4 +10,7 @@ class CassandraMapper::Base
 
   require 'cassandra_mapper/connection'
   include CassandraMapper::Connection
+
+  require 'cassandra_mapper/observable'
+  include CassandraMapper::Observable
 end
