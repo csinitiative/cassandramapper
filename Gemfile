@@ -14,4 +14,4 @@ git "git@github.com:csinitiative/simplemapper.git"
 gem "simple_mapper"
 
 # Callbacks, observers, etc.
-gem "activemodel"
+gem "activemodel", ">=3.0.pre"
