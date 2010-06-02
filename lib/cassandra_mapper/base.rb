@@ -13,4 +13,7 @@ class CassandraMapper::Base
 
   require 'cassandra_mapper/observable'
   include CassandraMapper::Observable
+
+  require 'cassandra_mapper/indexing'
+  include CassandraMapper::Indexing
 end
