@@ -357,6 +357,65 @@ module CassandraMapper
       @observer.activate!(self)
     end
 
+    # Retrieve a hash of indexed identifier to row key mappings from the index for
+    # all indexed _values_.  The _values_ may be an array of indexed values to check,
+    # or a single such value.  The result set is collapsed such that it cannot be determined
+    # which result corresponds to which index.  Additionally, if a particular row key is
+    # present in multiple indexes, it'll be redundantly represented here (as redundant values in
+    # the result hash).
+    #
+    # The _options_ are passed directly to the underlying Cassandra +get+/+multi_get+ invocations,
+    # and can be used to control paging through results, result set size limits, etc.
+    def get(values, options={})
+      case values
+        when Array
+          if values.size == 1
+            _single_get(values[0], options)
+          else
+            _multi_get(values, options)
+          end
+        else
+          _single_get(values, options)
+      end
+    end
+
+    # Retrieve the row keys for objects that have the indexed values specified
+    # in _values_.  The handling of _values_ and _options_ is done by the
+    # CassandraMapper::Index#get method, and row keys from the result set are
+    # collapsed into a unique list matching the original sort order.
+    #
+    # The resulting list could be passed to a find call or manipulated in some
+    # other delightful fashion.
+    def keys(values, options={})
+      get(values, options).values.uniq
+    end
+
+    # Retrieve the objects that have the indexed values specified in
+    # _values_.  The operations are analogous to CassandraMapper::Index#keys,
+    # except that a +find+ call is made on the receiver's _indexed_class_.
+    #
+    # If you are potentially dealing with large sets of objects, consider using
+    # the +:start+, +:finish+, and +:count+ options supported by the underlying
+    # Cassandra#get and Cassandra#multi_get functionality.
+    def objects(values, options={})
+      if ids = keys(values, options) and ids.size > 0
+        indexed_class.find(ids, {:allow_missing => true})
+      else
+        []
+      end
+    end
+
+    def _single_get(value, options)
+      indexed_class.connection.get(column_family, value, options)
+    end
+
+    def _multi_get(values, options)
+      indexed_class.connection.multi_get(column_family, values, options).values.inject({}) do |result, index|
+        result.merge!(index)
+        result
+      end
+    end
+
     class Observer < CassandraMapper::Observer
       class << self
         attr_accessor :index

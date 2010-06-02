@@ -176,6 +176,121 @@ class IndexingTest < Test::Unit::TestCase
         end
       end
     end
+
+    context 'read method' do
+      setup do
+        @indexed_class = Class.new(CassandraMapper::Base) do
+          maps :key
+          maps :some_source_field
+        end
+        @column_family = :MyIndexes
+        @source_attrib = :some_source_field
+        @instance = @class.new(:indexed_class => @indexed_class,
+                              :column_family => @column_family,
+                              :source        => @source_attrib)
+        @connection = stub(:connection)
+        @indexed_class.stubs(:connection).returns(@connection)
+        @expected = {"0000-id1" => "id1", "0001-id2" => "id2"}
+        @sorted_ids = ['id1', 'id2']
+      end
+
+      context 'get' do
+        context 'for single indexed value' do
+          setup do
+            @key = 'this indexed value'
+          end
+
+          should 'perform Cassandra get for the given index value and return raw result' do
+            @connection.expects(:get).with(@column_family, @key, {}).returns(@expected)
+            result = @instance.get(@key)
+            assert_equal @expected, result
+          end
+
+          should 'pass any options along to the Cassandra.get invocation' do
+            options = {:count => 2, :start => 'foo'}
+            @connection.expects(:get).with(@column_family, @key, options).returns(@expected)
+            @instance.get(@key, options)
+          end
+        end
+
+        context 'for multiple indexed values' do
+          setup do
+            @keys = ['this indexed value', 'that indexed value', 'mine', 'yours']
+            @client_result = {
+              'this indexed value' => {'0000-id1' => 'id1'},
+              'that indexed value' => {'0001-id2' => 'id2'},
+              'mine'               => {'aaaa-id1' => 'id1'},
+              'yours'              => {'bbbb-id2' => 'id2'},
+            }
+            @expected.merge!(@client_result['mine'])
+            @expected.merge!(@client_result['yours'])
+          end
+
+          should 'perform Cassandra.multi_get for multiple index values and return merged result' do
+            @connection.expects(:multi_get).with(@column_family, @keys, {}).returns(@client_result)
+            result = @instance.get(@keys)
+            assert_equal @expected, result
+          end
+
+          should 'pass any options along to underlying Cassandra.multi_get' do
+            options = {:count => 4, :finish => 'zzzzzyyyyzzzz'}
+            @connection.expects(:multi_get).with(@column_family, @keys, options).returns(@client_result)
+            @instance.get(@keys, options)
+          end
+        end
+      end
+
+      context 'keys' do
+        should 'retrieve data from :get and return identifiers based on result indexed id order' do
+          value = 'some value'
+          @instance.expects(:get).with(value, {}).returns(@expected)
+          result = @instance.keys(value)
+          assert_equal @sorted_ids, result
+        end
+
+        should 'collapse redundant identifiers down and preserve earliest order' do
+          value = 'some value'
+          @expected["aaaa-#{@sorted_ids[0]}"] = @sorted_ids[0]
+          @expected["bbbb-#{@sorted_ids[1]}"] = @sorted_ids[1]
+          @instance.expects(:get).with(value, {}).returns(@expected)
+          result = @instance.keys(value)
+          assert_equal @sorted_ids, result
+        end
+
+        should 'pass options through to :get' do
+          options = {:this => :that, :mine => :not_yours}
+          value = 'foo'
+          @instance.expects(:get).with(value, options).returns(@expected)
+          @instance.keys(value, options)
+        end
+      end
+
+      context 'objects' do
+        setup do
+          @expected_objects = @sorted_ids.collect {|id| @indexed_class.new(:key => id)}
+        end
+
+        should 'return results of a model class :find call with :keys as its arguments' do
+          @indexed_class.expects(:find).with(@sorted_ids, {:allow_missing => true}).returns(@expected_objects)
+          @instance.expects(:keys).with(value = 'foo', {}).returns(@sorted_ids)
+          result = @instance.objects(value)
+          assert_equal @expected_objects, result
+        end
+
+        should 'not call :find if :keys is empty, and return an empty array' do
+          @indexed_class.expects(:find).never
+          @instance.expects(:keys).with(value = 'foo', {}).returns([])
+          result = @instance.objects(value)
+          assert_equal [], result
+        end
+
+        should 'pass options through to :keys' do
+          @instance.expects(:keys).with(value = 'foo', options = {:this => :and, :that => :dude}).returns(@sorted_ids)
+          @indexed_class.expects(:find).with(@sorted_ids, {:allow_missing => true}).returns(@expected_objects)
+          @instance.objects(value, options)
+        end
+      end
+    end
   end
 
   context 'A Cassandra::Base-derived class' do
