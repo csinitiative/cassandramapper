@@ -366,10 +366,8 @@ class IndexingTest < Test::Unit::TestCase
         end
 
         should 'receive proper state_value and identifier_value values after :loaded' do
-          @class.foo.source = :some_attr
-          @class.foo.indexed_identifier = :key
-          @instance.stubs(:some_attr).returns(source = 'some_source_value')
-          @instance.stubs(:key).returns(key = 'some_key')
+          @class.foo.expects(:source_for).with(@instance).returns(source = 'some_source_value')
+          @class.foo.expects(:indexed_identifier_for).with(@instance).returns(key = 'some_key')
           @instance.loaded!
           assert_equal source, @instance.foo.source_value
           assert_equal key, @instance.foo.identifier_value

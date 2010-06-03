@@ -437,8 +437,8 @@ module CassandraMapper
 
       def after_load(instance)
         state = index.state_for(instance)
-        state.source_value     = instance.send(index.source)
-        state.identifier_value = instance.send(index.indexed_identifier)
+        state.source_value     = index.source_for(instance)
+        state.identifier_value = index.indexed_identifier_for(instance)
         instance
       end
 
