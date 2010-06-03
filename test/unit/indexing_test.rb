@@ -190,7 +190,10 @@ class IndexingTest < Test::Unit::TestCase
                               :source        => @source_attrib)
         @connection = stub(:connection)
         @indexed_class.stubs(:connection).returns(@connection)
-        @expected = {"0000-id1" => "id1", "0001-id2" => "id2"}
+        # the order reflects insert order, so we need to be very explicit here
+        @expected = Cassandra::OrderedHash.new()
+        @expected['0000-id1'] = 'id1'
+        @expected['0001-id2'] = 'id2'
         @sorted_ids = ['id1', 'id2']
       end
 
@@ -216,12 +219,12 @@ class IndexingTest < Test::Unit::TestCase
         context 'for multiple indexed values' do
           setup do
             @keys = ['this indexed value', 'that indexed value', 'mine', 'yours']
-            @client_result = {
-              'this indexed value' => {'0000-id1' => 'id1'},
-              'that indexed value' => {'0001-id2' => 'id2'},
-              'mine'               => {'aaaa-id1' => 'id1'},
-              'yours'              => {'bbbb-id2' => 'id2'},
-            }
+            @client_result = Cassandra::OrderedHash.new()
+            # the order reflects insert order, so we need to be explicit
+            @client_result['this indexed value'] = {'0000-id1' => 'id1'}
+            @client_result['that indexed value'] = {'0001-id2' => 'id2'}
+            @client_result['mine']               = {'aaaa-id1' => 'id1'}
+            @client_result['yours']              = {'bbbb-id2' => 'id2'}
             @expected.merge!(@client_result['mine'])
             @expected.merge!(@client_result['yours'])
           end

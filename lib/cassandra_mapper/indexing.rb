@@ -410,10 +410,14 @@ module CassandraMapper
     end
 
     def _multi_get(values, options)
-      indexed_class.connection.multi_get(column_family, values, options).values.inject({}) do |result, index|
-        result.merge!(index)
-        result
+      result = Cassandra::OrderedHash.new
+      indexes = indexed_class.connection.multi_get(column_family, values, options)
+      if indexes
+        indexes.values.each do |index|
+          result.merge!(index)
+        end
       end
+      result
     end
 
     class Observer < CassandraMapper::Observer
