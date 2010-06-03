@@ -35,6 +35,7 @@ module CassandraMapper::Persistence
   def create(uniq_key, options)
     _run_create_callbacks do
       write!(uniq_key, options)
+      self.new_record = false
       self
     end
   end

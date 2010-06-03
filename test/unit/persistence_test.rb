@@ -80,6 +80,13 @@ class PersistenceTest < Test::Unit::TestCase
             @instance.a = nil
             assert_raise(CassandraMapper::UndefinedKeyException) { @instance.save }
           end
+
+          should 'set :new_record? to false after the insert' do
+            operations = sequence('save operations')
+            @instance_connection.expects(:insert).once.in_sequence(operations)
+            @instance.expects(:new_record=).with(false).once.in_sequence(operations).returns(false)
+            assert @instance.save
+          end
         end
 
         context 'an existing record instance' do
