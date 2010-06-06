@@ -19,6 +19,8 @@ class CallbacksTest < Test::Unit::TestCase
       @sequence = sequence('invocation_sequence')
       @instance.stubs(:to_simple).returns({})
       @instance.stubs(:key).returns(:foo)
+      # intercept freeze invocations to prevent Mocha teardown errors
+      @instance.stubs(:freeze)
     end
 
     context 'first save' do

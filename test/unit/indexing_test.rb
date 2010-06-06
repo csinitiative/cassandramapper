@@ -393,6 +393,7 @@ class IndexingTest < Test::Unit::TestCase
 
         should 'remove from the index upon destroying an existing instance' do
           @instance.stubs(:new_record?).returns(false)
+          @instance.stubs(:freeze)
           @instance.some_attr = 'blah'
           @instance.id = 'foo'
           @class.foo.expects(:remove).with(@instance)

@@ -404,6 +404,9 @@ class PersistenceTest < Test::Unit::TestCase
         @object_old.stubs(:new_record?).returns(false)
         @key_old = 'old row'
         @object_old.stubs(:key).with.returns(@key_old)
+        # intercept freeze calls to prevent mocha issues
+        @object_new.stubs(:freeze)
+        @object_old.stubs(:freeze)
       end
 
       context 'via instance.delete' do
@@ -417,10 +420,14 @@ class PersistenceTest < Test::Unit::TestCase
 
         should 'freeze the instance' do
           @class.stubs(:delete)
+          # This would be better with a traditional assertion to check :frozen?,
+          # but Mocha has teardown problems that breaks the entire test suite on
+          # Ruby 1.8.7 when de-stubbing objects that are now marked as frozen.
+          # So we have to use expectations instead.
+          @object_new.expects(:freeze).with.once
+          @object_old.expects(:freeze).with.once
           @object_new.delete
           @object_old.delete
-          assert_equal true, @object_new.frozen?
-          assert_equal true, @object_old.frozen?
         end
 
         should 'invoke class.delete on existing rows only' do
@@ -443,10 +450,12 @@ class PersistenceTest < Test::Unit::TestCase
 
         should 'freeze the instance' do
           @class.stubs(:delete)
+          # Again, working around Mocha teardown issues, using expectations rather
+          # than assertions.
+          @object_new.expects(:freeze).with.once
+          @object_old.expects(:freeze).with.once
           @object_new.destroy
           @object_old.destroy
-          assert_equal true, @object_new.frozen?
-          assert_equal true, @object_old.frozen?
         end
 
         should 'mark the instance as destroyed' do
