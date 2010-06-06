@@ -451,6 +451,11 @@ module CassandraMapper
         index.update(instance)
         instance
       end
+
+      def after_destroy(instance)
+        index.remove(instance)
+        instance
+      end
     end
 
     class State

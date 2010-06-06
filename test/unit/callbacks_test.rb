@@ -10,6 +10,8 @@ class CallbacksTest < Test::Unit::TestCase
         after_create  :do_after_create
         before_update :do_before_update
         after_update  :do_after_update
+        before_destroy :do_before_destroy
+        after_destroy  :do_after_destroy
       end
       @instance = @class.new
       @connection = stub('connection')
@@ -69,6 +71,24 @@ class CallbacksTest < Test::Unit::TestCase
       should 'invoke the after_load callback' do
         @class.expects(:after_load_invoked).with(@source_values)
         @class.find(@key)
+      end
+    end
+
+    context 'destroy' do
+      should 'invoke the before_destroy and after_destroy callbacks on an existing row' do
+        @instance.stubs(:new_record?).returns(false)
+        @instance.expects(:do_before_destroy).once.in_sequence(@sequence).returns(true)
+        @class.expects(:delete).with(@instance.key).once.in_sequence(@sequence)
+        @instance.expects(:do_after_destroy).once.in_sequence(@sequence).returns(true)
+        @instance.destroy
+      end
+
+      should 'not invoke callbacks on a new row' do
+        @instance.stubs(:new_record?).returns(true)
+        @instance.expects(:do_before_destroy).never.in_sequence(@sequence)
+        @class.expects(:delete).with(@instance.key).never.in_sequence(@sequence)
+        @instance.expects(:do_after_destroy).never.in_sequence(@sequence)
+        @instance.destroy
       end
     end
   end

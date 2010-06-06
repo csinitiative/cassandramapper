@@ -41,6 +41,15 @@ class ObserverTest < Test::Unit::TestCase
         @instance.stubs(:new_record?).returns(false)
         @instance.save
       end
+
+      should 'invoke :before_destroy, :after_destroy on observer for existing record' do
+        seq = sequence('callbacks')
+        @instance.stubs(:new_record?).returns(false)
+        @class.stubs(:delete)
+        @observer.expects(:before_destroy).with(@instance).in_sequence(seq).returns(true)
+        @observer.expects(:after_destroy).with(@instance).in_sequence(seq).returns(true)
+        @instance.destroy
+      end
     end
   end
 end

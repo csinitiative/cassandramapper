@@ -9,6 +9,8 @@ module CassandraMapper
       :after_update,
       :before_save,
       :after_save,
+      :before_destroy,
+      :after_destroy,
     ]
 
     CALLBACKS.each do |cb|

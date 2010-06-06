@@ -390,6 +390,15 @@ class IndexingTest < Test::Unit::TestCase
           @instance.connection.expects(:insert)
           @instance.save
         end
+
+        should 'remove from the index upon destroying an existing instance' do
+          @instance.stubs(:new_record?).returns(false)
+          @instance.some_attr = 'blah'
+          @instance.id = 'foo'
+          @class.foo.expects(:remove).with(@instance)
+          @instance.connection.expects(:remove)
+          @instance.destroy
+        end
       end
     end
   end

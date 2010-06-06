@@ -375,6 +375,106 @@ class PersistenceTest < Test::Unit::TestCase
         assert_raises(CassandraMapper::InvalidArgumentException) { @class.find() }
       end
     end
+
+    context 'removing via class.delete' do
+      should 'invoke :remove on underlying client for the given id' do
+        @connection.expects(:remove).with(@column_family, key = 'foo')
+        # explicity verify: no object is instantiated for this
+        @class.expects(:new).never
+        @class.delete(key)
+      end
+
+      should 'invoke :remove on underlying client for all ids' do
+        # this is suboptimal, but that's what the client offers for now
+        keys = ['a', 'b', 'c', 'd']
+        keys.each {|key| @connection.expects(:remove).with(@column_family, key)}
+        # again, be sure no object is instantiated for this
+        @class.expects(:new).never
+        @class.delete(keys)
+      end
+    end
+
+    context 'removing via instance.delete' do
+      setup do
+        @object_new = @class.new
+        @object_new.stubs(:new_record?).returns(true)
+        @key_new = 'new row'
+        @object_new.stubs(:key).with.returns(@key_new)
+        @object_old = @class.new
+        @object_old.stubs(:new_record?).returns(false)
+        @key_old = 'old row'
+        @object_old.stubs(:key).with.returns(@key_old)
+      end
+
+      context 'via instance.delete' do
+        should 'mark the instance as destroyed' do
+          @class.stubs(:delete)
+          @object_new.delete
+          @object_old.delete
+          assert_equal true, @object_new.destroyed?
+          assert_equal true, @object_old.destroyed?
+        end
+
+        should 'freeze the instance' do
+          @class.stubs(:delete)
+          @object_new.delete
+          @object_old.delete
+          assert_equal true, @object_new.frozen?
+          assert_equal true, @object_old.frozen?
+        end
+
+        should 'invoke class.delete on existing rows only' do
+          seq = sequence('expectations')
+          @class.expects(:delete).with(@key_new).never.in_sequence(seq)
+          @class.expects(:delete).with(@key_old).once.in_sequence(seq)
+          @object_new.delete
+          @object_old.delete
+        end
+      end
+
+      context 'via instance.destroy' do
+        should 'invoke class.delete on existing rows only' do
+          seq = sequence('expectations')
+          @class.expects(:delete).with(@key_new).never.in_sequence(seq)
+          @class.expects(:delete).with(@key_old).once.in_sequence(seq)
+          @object_new.destroy
+          @object_old.destroy
+        end
+
+        should 'freeze the instance' do
+          @class.stubs(:delete)
+          @object_new.destroy
+          @object_old.destroy
+          assert_equal true, @object_new.frozen?
+          assert_equal true, @object_old.frozen?
+        end
+
+        should 'mark the instance as destroyed' do
+          @class.stubs(:delete)
+          @object_new.destroy
+          @object_old.destroy
+          assert_equal true, @object_new.destroyed?
+          assert_equal true, @object_old.destroyed?
+        end
+      end
+    end
+
+    context 'removing via class.destroy' do
+      should ':find the object based on given id and :destroy it' do
+        @instance = mock('row')
+        seq = sequence('order of events')
+        @class.expects(:find).with(some_id = 'terrible key').in_sequence(seq).returns(@instance)
+        @instance.expects(:destroy).in_sequence(seq)
+        @class.destroy(some_id)
+      end
+
+      should ':find all objects from given ids and :destroy them in turn' do
+        ids = ['a', 'b', 'c', 'd', 'e']
+        instances = ids.collect {|id| x = mock(id); x.expects(:destroy); x}
+        @class.expects(:find).with(ids).returns(instances)
+        @class.destroy(ids)
+      end
+    end
   end
 end
 

@@ -47,6 +47,17 @@ module CassandraMapper::Persistence
     end
   end
 
+  def destroy
+    unless new_record?
+      _run_destroy_callbacks do
+        self.class.delete(_check_key)
+      end
+    end
+    @destroyed = true
+    freeze
+    self
+  end
+
   def write!(uniq_key, options)
     connection.insert(self.class.column_family, uniq_key, to_simple(options))
   end
@@ -68,6 +79,17 @@ module CassandraMapper::Persistence
     uniq_key = self.key
     raise CassandraMapper::UndefinedKeyException if uniq_key.nil?
     uniq_key
+  end
+
+  def delete
+    self.class.delete(_check_key) unless new_record?
+    @destroyed = true
+    freeze
+    self
+  end
+
+  def destroyed?
+    (@destroyed && true) || false
   end
 
   module ClassMethods
@@ -116,6 +138,43 @@ module CassandraMapper::Persistence
       single ? result.first : result
     end
 
+    # Given a _key_ of a single row key or array of row keys,
+    # removes the rows from the Cassandra column family associated with
+    # the receiving class.
+    #
+    # As the underlying Cassandra client returns no information about the
+    # result of the operation, the result is always +nil+.
+    #
+    # The delete operation is purely database-side; no objects are instantiated
+    # and therefore no object callbacks take place for the deleted rows.
+    # This makes delete risky for classes that manage associations, indexes, etc.
+    def delete(key)
+      keys = Array === key ? key : [key]
+      keys.each do |key|
+        connection.remove(column_family, key)
+      end
+      nil
+    end
+
+    # Similar to +delete+; given a _key_ of a single row key or array of row keys,
+    # removes the rows from the Cassandra column family associated with the receiving
+    # class.
+    #
+    # However, unlike +delete+, +destroy+ loads up the object per row key in turn
+    # and invokes +destroy+ on each object.  This allows for callbacks and observers
+    # to be executed, which is essential for index maintenance, association maintenance,
+    # etc.
+    def destroy(key)
+      objs = find(key)
+      case objs
+        when Array
+          objs.each {|obj| obj.destroy}
+        else
+          objs.destroy
+      end
+      nil
+    end
+
     def connection
       @cassandra_mapper_connection
     end
@@ -132,7 +191,7 @@ module CassandraMapper::Persistence
     def self.extended(klass)
       klass.module_eval do
         extend ActiveModel::Callbacks
-        define_model_callbacks :save, :create, :update
+        define_model_callbacks :save, :create, :update, :destroy
         define_model_callbacks :load, :only => :after
       end
     end
