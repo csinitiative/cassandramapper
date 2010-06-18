@@ -68,8 +68,8 @@ module CassandraMapper::Persistence
         cassandra_args << {:timestamp => Time.stamp}
       end
       base_args = [self.class.column_family, uniq_key]
-      connection.insert(*base_args, structure, *cassandra_args) unless structure.empty?
-      deletes.each {|del_args| connection.remove(*base_args, *del_args, *cassandra_args)}
+      connection.insert(*(base_args + [structure] + cassandra_args)) unless structure.empty?
+      deletes.each {|del_args| connection.remove(*(base_args + del_args + cassandra_args))}
     else
       connection.insert(self.class.column_family, uniq_key, to_simple(options))
     end
@@ -287,7 +287,9 @@ module CassandraMapper::Persistence
         if v.nil?
           deletes << context + [k]
           source.delete(k)
-        elsif v.respond_to?(:each)
+        # pre 1.9 String responds to :each; but :values_at is a
+        # safe bet for 1.8 and 1.9 for array, hash, but not string.
+        elsif v.respond_to?(:values_at)
           prune_deletes(v, deletes, context + [k])
           source.delete(k) if v.empty?
         end
