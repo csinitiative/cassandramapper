@@ -30,6 +30,18 @@ class PersistenceTest < Test::Unit::TestCase
       @connection = stub('cassandra_client')
       @class.stubs(:connection).returns(@connection)
       @class.stubs(:column_family).returns(@column_family)
+      @supercolumn_family = 'TestSuperColumnFamily'
+      @supercolumn_class = Class.new(CassandraMapper::Base) do
+        [:a, :b, :c].each do |name|
+          maps name do
+            [:x, :y, :z].each {|inner| maps inner}
+          end
+        end
+
+        def key; a.x; end
+      end
+      @supercolumn_class.stubs(:connection).returns(@connection)
+      @supercolumn_class.stubs(:column_family).returns(@supercolumn_family)
     end
 
     context 'connection' do
@@ -106,6 +118,66 @@ class PersistenceTest < Test::Unit::TestCase
             expected = {'b' => @instance.b, 'c' => @instance.c}
             @instance_connection.expects(:insert).with(@column_family, key, expected).returns(nil)
             assert_equal @instance, @instance.save
+          end
+
+          should 'prune nil values in the top level to column deletions' do
+            key = @values['a']
+            @instance.b = nil
+            @instance_connection.expects(:remove).with(@column_family, key, 'b').returns(nil)
+            @instance.save
+          end
+
+          should 'properly combine insert and remove operations with consistent timestamp' do
+            stamp = Time.stamp
+            Time.stubs(:stamp).returns(stamp)
+            key = @values['a']
+            @instance.c = 'C Foo'
+            @instance.b = nil
+            @instance_connection.expects(:insert).with(@column_family, key, {'c' => 'C Foo'}, :timestamp => stamp).returns(nil)
+            @instance_connection.expects(:remove).with(@column_family, key, 'b', :timestamp => stamp).returns(nil)
+            @instance.save
+          end
+
+          context 'with supercolumns' do
+            setup do
+              @supercolumn_values = ['a', 'b', 'c'].inject({}) {|memo, supercol| memo[supercol] = ['x','y','z'].inject({}) {|hash, col| hash[col] = col + supercol; hash}; memo}
+              @supercolumn_instance = @supercolumn_class.new(@supercolumn_values)
+              @supercolumn_instance.stubs(:connection).returns(@instance_connection)
+              @supercolumn_instance.stubs(:new_record?).returns(false)
+            end
+
+            should 'prune nil values in the second level to subcolumn deletions with consistent timestamp' do
+              key = @supercolumn_instance.key
+              @supercolumn_instance.a.z = nil
+              @supercolumn_instance.b.y = nil
+              stamp = Time.stamp
+              Time.stubs(:stamp).returns(stamp)
+              @instance_connection.expects(:remove).with(@supercolumn_family, key, 'a', 'z', :timestamp => stamp)
+              @instance_connection.expects(:remove).with(@supercolumn_family, key, 'b', 'y', :timestamp => stamp)
+              @instance_connection.expects(:insert).never
+              @supercolumn_instance.save
+            end
+
+            should 'prune full supercolumns if top level is nil' do
+              key = @supercolumn_values['a']['x']
+              @supercolumn_instance.b = nil
+              @instance_connection.expects(:remove).with(@supercolumn_family, key, 'b')
+              @supercolumn_instance.save
+            end
+
+            should 'combine inserts and deletes properly with consistent timestamp' do
+              key = @supercolumn_values['a']['x']
+              stamp = Time.stamp
+              Time.stubs(:stamp).returns(stamp)
+              @supercolumn_instance.a.y = 'ay foo'
+              @supercolumn_instance.b.x = 'bx foo'
+              @supercolumn_instance.b.y = nil
+              @supercolumn_instance.c = nil
+              @instance_connection.expects(:insert).with(@supercolumn_family, key, {'a' => {'y' => 'ay foo'}, 'b' => {'x' => 'bx foo'}}, :timestamp => stamp).returns(nil)
+              @instance_connection.expects(:remove).with(@supercolumn_family, key, 'b', 'y', :timestamp => stamp)
+              @instance_connection.expects(:remove).with(@supercolumn_family, key, 'c', :timestamp => stamp)
+              @supercolumn_instance.save
+            end
           end
         end
       end

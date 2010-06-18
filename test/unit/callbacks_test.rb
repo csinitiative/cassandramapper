@@ -17,7 +17,8 @@ class CallbacksTest < Test::Unit::TestCase
       @connection = stub('connection')
       @instance.stubs(:connection).returns(@connection)
       @sequence = sequence('invocation_sequence')
-      @instance.stubs(:to_simple).returns({})
+      @simple_representation = {}
+      @instance.stubs(:to_simple).returns(@simple_representation)
       @instance.stubs(:key).returns(:foo)
       # intercept freeze invocations to prevent Mocha teardown errors
       @instance.stubs(:freeze)
@@ -42,6 +43,8 @@ class CallbacksTest < Test::Unit::TestCase
       setup do
         @instance.stubs(:new_record?).returns(false)
         @instance.stubs(:changed_attributes).returns([:blah])
+        # must provide an actual new value for an insert to take place
+        @simple_representation['blah'] = 'foo'
       end
 
       should 'invoke the before_save, before_update, after_update, after_save callbacks' do

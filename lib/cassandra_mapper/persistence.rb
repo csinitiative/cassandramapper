@@ -42,7 +42,7 @@ module CassandraMapper::Persistence
 
   def update(uniq_key, options)
     _run_update_callbacks do
-      write!(uniq_key, options)
+      write!(uniq_key, options.merge({ :with_delete => true }))
       self
     end
   end
@@ -59,7 +59,20 @@ module CassandraMapper::Persistence
   end
 
   def write!(uniq_key, options)
-    connection.insert(self.class.column_family, uniq_key, to_simple(options))
+    with_delete = options.delete(:with_delete)
+    structure = to_simple(options)
+    if with_delete
+      deletes = self.class.prune_deletes_from_simple_structure(structure)
+      cassandra_args = []
+      if ! (structure.empty? or deletes.empty?) or deletes.size >= 2
+        cassandra_args << {:timestamp => Time.stamp}
+      end
+      base_args = [self.class.column_family, uniq_key]
+      connection.insert(*base_args, structure, *cassandra_args) unless structure.empty?
+      deletes.each {|del_args| connection.remove(*base_args, *del_args, *cassandra_args)}
+    else
+      connection.insert(self.class.column_family, uniq_key, to_simple(options))
+    end
   end
 
   def to_mutation(with_validation = true, options = {})
@@ -267,6 +280,24 @@ module CassandraMapper::Persistence
           list
         end
       end
+    end
+
+    def prune_deletes(source, deletes, context)
+      source.each do |k, v|
+        if v.nil?
+          deletes << context + [k]
+          source.delete(k)
+        elsif v.respond_to?(:each)
+          prune_deletes(v, deletes, context + [k])
+          source.delete(k) if v.empty?
+        end
+      end
+    end
+
+    def prune_deletes_from_simple_structure(structure)
+      deletes = []
+      prune_deletes(structure, deletes, [])
+      deletes
     end
   end
 
