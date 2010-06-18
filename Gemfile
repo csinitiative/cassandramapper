@@ -6,6 +6,8 @@ gem "rake"
 gem "shoulda"
 gem "mocha"
 
+gem "tzinfo"
+
 # Cassandra Thrift client
 gem "cassandra"
 
