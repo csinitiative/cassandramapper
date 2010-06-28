@@ -6,8 +6,8 @@ gem "rake"
 gem "shoulda"
 gem "mocha"
 
+# Other required gems
 gem "tzinfo"
-gem "i18n"
 
 # Cassandra Thrift client
 gem "cassandra"
