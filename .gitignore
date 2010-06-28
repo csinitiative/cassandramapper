@@ -1,3 +1,7 @@
+# project artifacts
 .bundle
 tmp
 *.gem
+
+# editor artifacts
+*.tmproj

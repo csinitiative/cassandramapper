@@ -7,6 +7,7 @@ gem "shoulda"
 gem "mocha"
 
 gem "tzinfo"
+gem "i18n"
 
 # Cassandra Thrift client
 gem "cassandra"
@@ -14,6 +15,3 @@ gem "cassandra"
 # Foundation for the object modeling
 git "git@github.com:csinitiative/simplemapper.git"
 gem "simple_mapper"
-
-# Callbacks, observers, etc.
-gem "activemodel", ">=3.0.pre"
