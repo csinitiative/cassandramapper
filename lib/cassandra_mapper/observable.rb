@@ -1,4 +1,4 @@
-require 'active_model'
+require 'cassandra_mapper/support/observing'
 module CassandraMapper
   module Observable
     CALLBACKS = [
@@ -31,6 +31,6 @@ module CassandraMapper
     end
   end
 
-  class Observer < ActiveModel::Observer
+  class Observer < CassandraMapper::Support::Observer
   end
 end
