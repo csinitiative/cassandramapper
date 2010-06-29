@@ -22,7 +22,7 @@ module CassandraMapper
 
     def self.included(klass)
       klass.module_eval do
-        include ActiveModel::Observing
+        include CassandraMapper::Support::Observing
         CALLBACKS.each do |callback|
           name = callback.to_s
           send(callback, :"_notify_observer_#{name}")

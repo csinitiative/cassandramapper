@@ -1,4 +1,4 @@
-require 'active_model'
+require 'cassandra_mapper/support/callbacks'
 module CassandraMapper::Persistence
   def _determine_transform_options
     options = {:string_keys => true}
@@ -137,7 +137,7 @@ module CassandraMapper::Persistence
         else
           options = {}
       end
-      
+
       result = connection.multi_get(column_family, keys).values.inject([]) do |arr, hash|
         if not hash.empty?
           obj = new(hash)
@@ -203,7 +203,7 @@ module CassandraMapper::Persistence
 
     def self.extended(klass)
       klass.module_eval do
-        extend ActiveModel::Callbacks
+        extend CassandraMapper::Support::Callbacks
         define_model_callbacks :save, :create, :update, :destroy
         define_model_callbacks :load, :only => :after
       end
