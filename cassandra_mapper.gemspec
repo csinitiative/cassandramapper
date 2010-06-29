@@ -14,6 +14,7 @@ Gem::Specification.new do |s|
   s.add_dependency('rake')
   s.add_dependency('shoulda')
   s.add_dependency('mocha')
+  s.add_dependency('tzinfo')
   s.add_dependency('cassandra')
   s.add_dependency('simple_mapper')
 
