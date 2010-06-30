@@ -1,4 +1,5 @@
 require 'cassandra_mapper/core_ext/module/attribute_accessors'
+require 'cassandra_mapper/support/inflector'
 
 module CassandraMapper #:nodoc:
   module Support
